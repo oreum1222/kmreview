@@ -44,7 +44,8 @@
         db.answers = Object.assign({}, db.answers, res.answers || {});
         db.reviews = Object.assign({}, db.reviews, res.reviews || {});
         localSave();
-        if (res.rounds && res.rounds.length) window.Rounds = res.rounds;   // 회차는 서버가 진짜다
+        if (res.rounds && res.rounds.length)
+          window.Rounds = res.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));   // 회차는 서버가 진짜다
       }
     } catch (e) { console.warn('서버 불러오기 실패, 로컬로 동작합니다.', e); }
     return db;

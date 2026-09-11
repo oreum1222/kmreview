@@ -42,7 +42,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js';
+      s.src = 'data/rounds.js?v=20260912a';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -89,14 +89,24 @@
       const err = document.getElementById('gateErr');
       const btn = document.getElementById('gateGo');
       err.textContent = ''; btn.disabled = true; btn.textContent = '확인 중';
-      const r = await window.Store.verify(pin);
+      // 서버가 자고 있으면 첫 응답이 느리다. 기다리는 중이라는 것을 보여 준다.
+      const slow = setTimeout(() => { err.style.color = 'var(--dim)'; err.textContent = '서버를 깨우는 중입니다. 길면 30초쯤 걸립니다.'; }, 3000);
+      let r;
+      try {
+        r = await window.Store.verify(pin);
+      } catch (e) {
+        r = { ok: false, reason: 'server', detail: String(e) };
+      }
+      clearTimeout(slow);
       btn.disabled = false; btn.textContent = '들어가기';
-      if (!r.ok) {
-        err.textContent = r.reason === 'pin'
+      err.style.color = 'var(--err)';
+      if (!r || !r.ok) {
+        err.textContent = (r && r.reason === 'pin')
           ? 'PIN이 맞지 않습니다.'
-          : '서버에 연결하지 못했습니다. 스크립트 권한 승인이 아직이면 그것부터 해야 합니다.';
+          : '서버에 연결하지 못했습니다. 잠시 뒤 다시 눌러 보십시오.';
         return;
       }
+      err.textContent = '';
       enter(sel.value);
     };
     document.getElementById('gateGo').onclick = go;
