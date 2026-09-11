@@ -33,7 +33,7 @@
   function tokens(ans) {
     return String(ans || '')
       .split(/[㉠-㉿ⓐ-ⓩ]|\s*[\/,;]\s*/)
-      .map(t => t.replace(/^[\s.·]+|[\s.·]+$/g, '').replace(/^['‘"“]|['’"”]$/g, '').trim())
+      .map(t => t.replace(/^[\s.·:：]+|[\s.·:：]+$/g, '').replace(/^['‘"“]|['’"”]$/g, '').trim())
       .filter(t => t.length > 0);
   }
   function symbolSource(q) {
