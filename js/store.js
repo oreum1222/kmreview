@@ -97,13 +97,18 @@
   function allAnswers() { return db.answers; }
   function allReviews() { return db.reviews; }
 
+  /* {ok} 또는 {ok:false, reason:'pin'|'server'} */
   async function verify(pin) {
     setPin(pin);
-    if (!live()) return pin === window.CONFIG.PIN;
+    if (!live()) return pin === window.CONFIG.PIN ? { ok: true } : { ok: false, reason: 'pin' };
     try {
       const res = await get({ action: 'all', pin: pin });
-      return !!(res && res.ok);
-    } catch (e) { return false; }
+      if (res && res.ok) return { ok: true };
+      if (res && res.error === 'pin') return { ok: false, reason: 'pin' };
+      return { ok: false, reason: 'server' };
+    } catch (e) {
+      return { ok: false, reason: 'server' };   // 응답이 JSON 이 아니면 서버가 아직 준비되지 않은 것
+    }
   }
 
   async function saveRound(round) {

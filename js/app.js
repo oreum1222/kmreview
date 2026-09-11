@@ -89,9 +89,14 @@
       const err = document.getElementById('gateErr');
       const btn = document.getElementById('gateGo');
       err.textContent = ''; btn.disabled = true; btn.textContent = '확인 중';
-      const ok = await window.Store.verify(pin);
+      const r = await window.Store.verify(pin);
       btn.disabled = false; btn.textContent = '들어가기';
-      if (!ok) { err.textContent = 'PIN이 맞지 않습니다.'; return; }
+      if (!r.ok) {
+        err.textContent = r.reason === 'pin'
+          ? 'PIN이 맞지 않습니다.'
+          : '서버에 연결하지 못했습니다. 스크립트 권한 승인이 아직이면 그것부터 해야 합니다.';
+        return;
+      }
       enter(sel.value);
     };
     document.getElementById('gateGo').onclick = go;
