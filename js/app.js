@@ -42,7 +42,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912d';
+      s.src = 'data/rounds.js?v=20260912e';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -123,6 +123,20 @@
     err.parentNode.appendChild(b);
   }
 
+  /* 무슨 일이 일어나는지 화면에 그대로 남긴다 */
+  const T0 = Date.now();
+  function log(msg) {
+    const el = document.getElementById('gateLog');
+    if (!el) return;
+    const t = ((Date.now() - T0) / 1000).toFixed(1);
+    el.textContent = (el.textContent ? el.textContent + String.fromCharCode(10) : '') + t + 's ' + msg;
+    el.style.whiteSpace = 'pre-wrap';
+  }
+  window.addEventListener('error', e => log('오류: ' + (e.message || '') + ' @' + (e.filename || '').split('/').pop() + ':' + e.lineno));
+  window.addEventListener('unhandledrejection', e => log('미처리 거부: ' + String(e.reason).slice(0, 120)));
+
+  window.__kmlog = log;
+
   let gateReady = false;
   function initGate() {
     if (gateReady) return;
@@ -137,7 +151,9 @@
     if (saved && window.CONFIG.STAFF.indexOf(saved) !== -1) sel.value = saved;
 
     const go = async () => {
+      log('버튼 눌림');
       const pin = document.getElementById('gatePin').value.trim();
+      log('PIN ' + pin.length + '자');
       const err = document.getElementById('gateErr');
       const btn = document.getElementById('gateGo');
       err.textContent = ''; btn.disabled = true; btn.textContent = '확인 중';
@@ -145,8 +161,11 @@
       const slow = setTimeout(() => { err.style.color = 'var(--dim)'; err.textContent = '서버를 깨우는 중입니다. 길면 30초쯤 걸립니다.'; }, 3000);
       let r;
       try {
+        log('서버에 확인 요청');
         r = await window.Store.verify(pin);
+        log('응답 ' + JSON.stringify(r));
       } catch (e) {
+        log('예외 ' + String(e).slice(0, 140));
         r = { ok: false, reason: 'server', detail: String(e) };
       }
       clearTimeout(slow);
@@ -160,9 +179,11 @@
         return;
       }
       err.textContent = '';
-      enter(sel.value);
+      log('통과, 화면 준비 중');
+      enter(sel.value).catch(e => log('화면 준비 실패 ' + String(e).slice(0, 140)));
     };
     document.getElementById('gateGo').onclick = go;
+    log('버튼 준비됨');
     ping();
     document.getElementById('gatePin').onkeydown = e => { if (e.key === 'Enter') go(); };
     document.getElementById('logout').onclick = () => {

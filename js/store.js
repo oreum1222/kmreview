@@ -27,9 +27,12 @@
     for (let i = 0; i < 3; i++) {
       try {
         const r = await fetch(url, opts);
-        return await r.json();
+        const t = await r.text();
+        try { return JSON.parse(t); }
+        catch (pe) { throw new Error('JSON 아님 ' + r.status + ' ' + t.slice(0, 60)); }
       } catch (e) {
         last = e;
+        if (window.__kmlog) window.__kmlog('시도 ' + (i + 1) + ' 실패: ' + String(e).slice(0, 90));
         await new Promise(s => setTimeout(s, 1200 * (i + 1)));
       }
     }
