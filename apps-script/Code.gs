@@ -87,6 +87,24 @@ function doPost(e) {
       rs.getRange(rs.getLastRow() + 1, 1, add.length, 6).setValues(add);
       return json_({ ok: true, saved: true, chunks: add.length, items: (rd.items || []).length });
     }
+    if (body.action === 'deleteRound') {
+      var ds = sheet_('rounds');
+      var drows = ds.getDataRange().getValues();
+      var gone = 0;
+      for (var d = drows.length - 1; d >= 1; d--) {
+        if (drows[d][0] === body.id) { ds.deleteRow(d + 1); gone++; }
+      }
+      return json_({ ok: true, deleted: gone });
+    }
+    if (body.action === 'deleteRecord' && RECORD_TABS.indexOf(body.kind) !== -1) {
+      var xs = sheet_(body.kind);
+      var xrows = xs.getDataRange().getValues();
+      var cut = 0;
+      for (var x = xrows.length - 1; x >= 1; x--) {
+        if (xrows[x][0] === body.round && xrows[x][1] === body.staff) { xs.deleteRow(x + 1); cut++; }
+      }
+      return json_({ ok: true, deleted: cut });
+    }
     if (body.action !== 'save' || RECORD_TABS.indexOf(body.kind) === -1)
       return json_({ ok: false, error: 'action' });
 
