@@ -42,7 +42,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912a';
+      s.src = 'data/rounds.js?v=20260912b';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -72,6 +72,31 @@
 
     paintNav();
     render();
+  }
+
+  /* 무엇이 막혔는지 화면에서 바로 확인할 수 있게 한다 */
+  function showDiag(err) {
+    if (document.getElementById('diagBtn')) return;
+    const b = document.createElement('button');
+    b.id = 'diagBtn';
+    b.className = 'btn sm';
+    b.style.marginTop = '8px';
+    b.textContent = '연결 진단';
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = '확인 중';
+      const out = document.createElement('div');
+      out.style.cssText = 'margin-top:8px;font-size:11.5px;color:var(--dim);word-break:break-all;line-height:1.5';
+      const u = window.CONFIG.SCRIPT_URL + '?action=all&pin=' + encodeURIComponent(document.getElementById('gatePin').value.trim());
+      try {
+        const res = await fetch(u, { cache: 'no-store' });
+        const t = await res.text();
+        out.textContent = '응답 ' + res.status + ' · ' + t.slice(0, 160);
+      } catch (e) {
+        out.textContent = '요청 실패 · ' + String(e).slice(0, 200);
+      }
+      b.replaceWith(out);
+    };
+    err.parentNode.appendChild(b);
   }
 
   function initGate() {
@@ -104,6 +129,7 @@
         err.textContent = (r && r.reason === 'pin')
           ? 'PIN이 맞지 않습니다.'
           : '서버에 연결하지 못했습니다. 잠시 뒤 다시 눌러 보십시오.';
+        showDiag(err);
         return;
       }
       err.textContent = '';
