@@ -87,10 +87,11 @@
       const ptext = passageText(q);
       const pnorm = norm(ptext);
 
-      /* E1 — 문항 배점 합 10.0 */
+      /* E1 — 문항 배점. 국민대는 문항당 가변(8~12점)이고 계열 총합이 기준이다. */
       if (subs.length && subs.every(s => typeof s.score === 'number')) {
         const sum = round1(subs.reduce((a, s) => a + s.score, 0));
-        if (Math.abs(sum - 10) > 0.005) add('error', 'E1', q.no, '', '소문항 배점 합이 ' + sum + '점입니다. 10.0점이어야 합니다.');
+        if (sum < 8 || sum > 12)
+          add('error', 'E1', q.no, '', '소문항 배점 합이 ' + sum + '점입니다. 한 문항은 8점에서 12점 사이여야 합니다.');
       }
 
       /* A2 — 중략 횟수 */
@@ -232,6 +233,24 @@
       const md = (writtenText(q).match(/·/g) || []).length;
       if (md) add('warn', 'F2', q.no, '', '발문이나 〈보기〉나 정답에 가운뎃점이 ' + md + '곳 있습니다. 와, 과, 및, 쉼표로 바꿀 수 있는지 보십시오. 지문은 원문이므로 손대지 않습니다.');
     });
+
+    /* E1 — 계열 총합. 인문 8문항은 80.0점이어야 한다. */
+    const byGye = {};
+    (round.items || []).forEach(q => {
+      if (!q.gyeyeol) return;
+      const subs = q.subs || [];
+      if (!subs.length || !subs.every(s => typeof s.score === 'number')) return;
+      byGye[q.gyeyeol] = byGye[q.gyeyeol] || { sum: 0, n: 0, nos: [] };
+      byGye[q.gyeyeol].sum += subs.reduce((a, s) => a + s.score, 0);
+      byGye[q.gyeyeol].n++;
+      byGye[q.gyeyeol].nos.push(q.no);
+    });
+    if (byGye['인문'] && byGye['인문'].n === 8) {
+      const t = round1(byGye['인문'].sum);
+      if (Math.abs(t - 80) > 0.005)
+        byGye['인문'].nos.forEach(no =>
+          add('error', 'E1', no, '', '인문 8문항 배점 총합이 ' + t + '점입니다. 80.0점이어야 합니다.'));
+    }
 
     return out;
   }
