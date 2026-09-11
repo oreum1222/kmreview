@@ -31,14 +31,40 @@ function setup() {
   return '시트 준비 완료';
 }
 
-function json_(o) {
+function json_(o, cb) {
+  // fetch 가 막히는 환경에서는 script 태그로 받아 간다(JSONP)
+  if (cb && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(cb)) {
+    return ContentService.createTextOutput(cb + '(' + JSON.stringify(o) + ');')
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
   return ContentService.createTextOutput(JSON.stringify(o))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
 function doGet(e) {
   var p = e.parameter || {};
-  if (p.pin !== pin_()) return json_({ ok: false, error: 'pin' });
+  var cb = p.callback || '';
+  if (p.pin !== pin_()) return json_({ ok: false, error: 'pin' }, cb);
+
+  // POST 가 막히는 환경을 위한 저장 통로
+  if (p.action === 'save' && RECORD_TABS.indexOf(p.kind) !== -1) {
+    var lk = LockService.getScriptLock();
+    lk.waitLock(15000);
+    try {
+      var sh = sheet_(p.kind);
+      var rw = sh.getDataRange().getValues();
+      var now2 = new Date();
+      for (var q = 1; q < rw.length; q++) {
+        if (rw[q][0] === p.round && rw[q][1] === p.staff) {
+          sh.getRange(q + 1, 3, 1, 2).setValues([[p.payload || '{}', now2]]);
+          return json_({ ok: true, updated: true }, cb);
+        }
+      }
+      sh.appendRow([p.round, p.staff, p.payload || '{}', now2]);
+      return json_({ ok: true, created: true }, cb);
+    } finally { lk.releaseLock(); }
+  }
+
   if (p.action === 'all') {
     var out = { ok: true, answers: {}, reviews: {}, rounds: [] };
     RECORD_TABS.forEach(function (name) {
@@ -60,9 +86,9 @@ function doGet(e) {
     order.forEach(function (id) {
       try { out.rounds.push(JSON.parse(buf[id].join(''))); } catch (err) { }
     });
-    return json_(out);
+    return json_(out, cb);
   }
-  return json_({ ok: false, error: 'action' });
+  return json_({ ok: false, error: 'action' }, cb);
 }
 
 function doPost(e) {

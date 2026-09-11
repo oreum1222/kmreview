@@ -42,7 +42,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912e';
+      s.src = 'data/rounds.js?v=20260912f';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -80,20 +80,11 @@
     if (!el || !window.CONFIG.SCRIPT_URL) return;
     el.textContent = '서버 확인 중';
     try {
-      let t = '';
-      for (let i = 0; i < 3 && !t; i++) {
-        try {
-          const r = await fetch(window.CONFIG.SCRIPT_URL + '?action=ping', { cache: 'no-store' });
-          t = await r.text();
-        } catch (e) {
-          await new Promise(s => setTimeout(s, 1200 * (i + 1)));
-        }
-      }
-      if (!t) throw new Error('무응답');
-      el.textContent = t.indexOf('{') === 0 ? '서버 연결됨' : '서버 응답 이상';
-      el.style.color = t.indexOf('{') === 0 ? 'var(--accent)' : 'var(--warn)';
+      await window.Store.ping();
+      el.textContent = '서버 연결됨';
+      el.style.color = 'var(--accent)';
     } catch (e) {
-      el.textContent = '서버에 닿지 못함 · ' + String(e).slice(0, 90);
+      el.textContent = '서버에 닿지 못함 · ' + String(e.message || e).slice(0, 90);
       el.style.color = 'var(--err)';
     }
   }

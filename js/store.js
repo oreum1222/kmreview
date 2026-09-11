@@ -20,36 +20,72 @@
     try { localStorage.setItem(KEY(), JSON.stringify(db)); } catch (e) { }
   }
 
-  /* 서버가 자고 있다 깨는 첫 요청은 한 번 실패하고 곧바로 다시 하면 된다.
-     그래서 짧게 쉬며 세 번까지 다시 시도한다. */
-  async function tryFetch(url, opts) {
-    let last;
-    for (let i = 0; i < 3; i++) {
-      try {
-        const r = await fetch(url, opts);
-        const t = await r.text();
-        try { return JSON.parse(t); }
-        catch (pe) { throw new Error('JSON 아님 ' + r.status + ' ' + t.slice(0, 60)); }
-      } catch (e) {
-        last = e;
-        if (window.__kmlog) window.__kmlog('시도 ' + (i + 1) + ' 실패: ' + String(e).slice(0, 90));
-        await new Promise(s => setTimeout(s, 1200 * (i + 1)));
-      }
-    }
-    throw last;
+  /* 어떤 브라우저에서는 fetch 가 응답도 오류도 없이 매달린다.
+     그래서 시간 제한을 걸고, 그래도 안 되면 script 태그로 받아 온다(JSONP). */
+  const TIMEOUT = 9000;
+  function note(m) { if (window.__kmlog) window.__kmlog(m); }
+
+  function withUrl(params) {
+    const u = new URL(window.CONFIG.SCRIPT_URL);
+    Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
+    return u;
+  }
+
+  async function fetchOnce(url, opts) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), TIMEOUT);
+    try {
+      const r = await fetch(url, Object.assign({ signal: ac.signal }, opts));
+      const t = await r.text();
+      try { return JSON.parse(t); }
+      catch (pe) { throw new Error('JSON 아님 ' + r.status); }
+    } finally { clearTimeout(timer); }
+  }
+
+  let jsonpN = 0;
+  function jsonp(params) {
+    return new Promise((res, rej) => {
+      const cb = '__kmcb' + (++jsonpN);
+      const u = withUrl(params);
+      u.searchParams.set('callback', cb);
+      const el = document.createElement('script');
+      const timer = setTimeout(() => { done(); rej(new Error('우회 통로 시간 초과')); }, 30000);
+      function done() { clearTimeout(timer); try { delete window[cb]; } catch (e) { } el.remove(); }
+      window[cb] = d => { done(); res(d); };
+      el.onerror = () => { done(); rej(new Error('우회 통로 실패')); };
+      el.src = u.toString();
+      document.head.appendChild(el);
+    });
   }
 
   async function get(params) {
-    const u = new URL(window.CONFIG.SCRIPT_URL);
-    Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
-    return await tryFetch(u.toString(), { cache: 'no-store' });
+    const url = withUrl(params).toString();
+    for (let i = 0; i < 2; i++) {
+      try { return await fetchOnce(url, { cache: 'no-store' }); }
+      catch (e) { note('직접 요청 ' + (i + 1) + '차 실패: ' + String(e.message || e).slice(0, 60)); }
+    }
+    note('우회 통로로 다시 시도');
+    return await jsonp(params);
   }
+
   async function post(body) {
-    // text/plain 으로 보내야 preflight 없이 Apps Script 가 받는다
-    return await tryFetch(window.CONFIG.SCRIPT_URL, {
-      method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(Object.assign({ pin: PIN }, body))
-    });
+    const payload = JSON.stringify(Object.assign({ pin: PIN }, body));
+    for (let i = 0; i < 2; i++) {
+      try {
+        return await fetchOnce(window.CONFIG.SCRIPT_URL, {
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: payload
+        });
+      } catch (e) { note('저장 ' + (i + 1) + '차 실패: ' + String(e.message || e).slice(0, 60)); }
+    }
+    // 저장도 우회 통로로. 길이가 감당되는 것만 보낸다.
+    if (body.action === 'save') {
+      const p = JSON.stringify(body.payload || {});
+      if (p.length < 6000) {
+        note('저장을 우회 통로로 다시 시도');
+        return await jsonp({ pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p });
+      }
+    }
+    throw new Error('저장 실패');
   }
 
   async function load() {
@@ -134,5 +170,7 @@
     return await post({ action: 'saveRound', round: round });
   }
 
-  window.Store = { load, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
+  async function ping() { return await get({ action: 'ping' }); }
+
+  window.Store = { load, ping, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
 })();
