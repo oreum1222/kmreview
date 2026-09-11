@@ -20,19 +20,33 @@
     try { localStorage.setItem(KEY(), JSON.stringify(db)); } catch (e) { }
   }
 
+  /* 서버가 자고 있다 깨는 첫 요청은 한 번 실패하고 곧바로 다시 하면 된다.
+     그래서 짧게 쉬며 세 번까지 다시 시도한다. */
+  async function tryFetch(url, opts) {
+    let last;
+    for (let i = 0; i < 3; i++) {
+      try {
+        const r = await fetch(url, opts);
+        return await r.json();
+      } catch (e) {
+        last = e;
+        await new Promise(s => setTimeout(s, 1200 * (i + 1)));
+      }
+    }
+    throw last;
+  }
+
   async function get(params) {
     const u = new URL(window.CONFIG.SCRIPT_URL);
     Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
-    const r = await fetch(u.toString(), { cache: 'no-store' });
-    return await r.json();
+    return await tryFetch(u.toString(), { cache: 'no-store' });
   }
   async function post(body) {
     // text/plain 으로 보내야 preflight 없이 Apps Script 가 받는다
-    const r = await fetch(window.CONFIG.SCRIPT_URL, {
+    return await tryFetch(window.CONFIG.SCRIPT_URL, {
       method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(Object.assign({ pin: PIN }, body))
     });
-    return await r.json();
   }
 
   async function load() {
