@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912j';
+      s.src = 'data/rounds.js?v=20260912k';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -61,8 +61,12 @@
   async function enter(name) {
     S.staff = name;
     sessionStorage.setItem('kmr-staff', name);
-    document.getElementById('gate').hidden = true;
-    document.getElementById('shell').hidden = false;
+    const gateEl = document.getElementById('gate');
+    gateEl.hidden = true;
+    gateEl.style.display = 'none';          // 혹시 모를 규칙 충돌까지 막는다
+    const shellEl = document.getElementById('shell');
+    shellEl.hidden = false;
+    shellEl.style.display = '';
     document.getElementById('whoPill').textContent = name;
 
     const view = document.getElementById('view');
