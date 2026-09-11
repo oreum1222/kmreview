@@ -65,6 +65,43 @@ function doGet(e) {
     } finally { lk.releaseLock(); }
   }
 
+  if (p.action === 'auth') return json_({ ok: true }, cb);          // PIN 확인만
+
+  if (p.action === 'records') {                                      // 답안과 검수 기록만
+    var rec = { ok: true, answers: {}, reviews: {} };
+    RECORD_TABS.forEach(function (name) {
+      var rows = sheet_(name).getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) {
+        if (!rows[i][0]) continue;
+        try { rec[name][rows[i][0] + '||' + rows[i][1]] = JSON.parse(rows[i][2]); } catch (err) { }
+      }
+    });
+    return json_(rec, cb);
+  }
+
+  if (p.action === 'roundlist') {                                    // 회차 이름만
+    var lst = [], seen = {};
+    var lr = sheet_('rounds').getDataRange().getValues();
+    for (var i2 = 1; i2 < lr.length; i2++) {
+      var id2 = lr[i2][0];
+      if (!id2 || seen[id2]) continue;
+      seen[id2] = true;
+      lst.push({ id: id2, title: lr[i2][1], date: lr[i2][2] });
+    }
+    return json_({ ok: true, rounds: lst }, cb);
+  }
+
+  if (p.action === 'round') {                                        // 회차 하나만
+    var parts = [];
+    var rr2 = sheet_('rounds').getDataRange().getValues();
+    for (var i3 = 1; i3 < rr2.length; i3++) {
+      if (rr2[i3][0] === p.id) parts[Number(rr2[i3][3]) || 0] = String(rr2[i3][4] || '');
+    }
+    if (!parts.length) return json_({ ok: false, error: 'round' }, cb);
+    try { return json_({ ok: true, round: JSON.parse(parts.join('')) }, cb); }
+    catch (err) { return json_({ ok: false, error: 'parse' }, cb); }
+  }
+
   if (p.action === 'all') {
     var out = { ok: true, answers: {}, reviews: {}, rounds: [] };
     RECORD_TABS.forEach(function (name) {

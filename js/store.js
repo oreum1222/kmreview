@@ -99,16 +99,35 @@
     localLoad();
     if (!live()) return db;
     try {
-      const res = await get({ action: 'all', pin: PIN });
-      if (res && res.ok) {
-        db.answers = Object.assign({}, db.answers, res.answers || {});
-        db.reviews = Object.assign({}, db.reviews, res.reviews || {});
+      const rec = await get({ action: 'records', pin: PIN });
+      if (rec && rec.ok) {
+        db.answers = Object.assign({}, db.answers, rec.answers || {});
+        db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
         localSave();
-        if (res.rounds && res.rounds.length)
-          window.Rounds = res.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));   // 회차는 서버가 진짜다
       }
-    } catch (e) { console.warn('서버 불러오기 실패, 로컬로 동작합니다.', e); }
+    } catch (e) { note('기록 불러오기 실패: ' + String(e.message || e).slice(0, 60)); }
+    try {
+      const lst = await get({ action: 'roundlist', pin: PIN });
+      if (lst && lst.ok && lst.rounds)
+        window.Rounds = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    } catch (e) { note('회차 목록 실패: ' + String(e.message || e).slice(0, 60)); }
     return db;
+  }
+
+  /* 회차 본문은 고를 때 한 번만 받아 온다 */
+  const roundCache = {};
+  async function ensureRound(id) {
+    if (!id) return null;
+    const cur = (window.Rounds || []).find(r => r.id === id);
+    if (cur && cur.items && cur.items.length) return cur;
+    if (roundCache[id]) return roundCache[id];
+    if (!live()) return cur || null;
+    const res = await get({ action: 'round', pin: PIN, id: id });
+    if (!res || !res.ok || !res.round) throw new Error('회차를 받지 못했습니다');
+    roundCache[id] = res.round;
+    const i = (window.Rounds || []).findIndex(r => r.id === id);
+    if (i >= 0) window.Rounds[i] = res.round; else window.Rounds.push(res.round);
+    return res.round;
   }
 
   function k(round, staff) { return round + '||' + staff; }
@@ -163,7 +182,7 @@
     setPin(pin);
     if (!live()) return pin === window.CONFIG.PIN ? { ok: true } : { ok: false, reason: 'pin' };
     try {
-      const res = await get({ action: 'all', pin: pin });
+      const res = await get({ action: 'auth', pin: pin });
       if (res && res.ok) return { ok: true };
       if (res && res.error === 'pin') return { ok: false, reason: 'pin' };
       return { ok: false, reason: 'server' };
@@ -179,5 +198,5 @@
 
   async function ping() { return await get({ action: 'ping' }); }
 
-  window.Store = { load, ping, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
+  window.Store = { load, ping, ensureRound, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
 })();

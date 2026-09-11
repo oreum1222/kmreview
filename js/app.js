@@ -13,10 +13,19 @@
   function round() { return (window.Rounds || []).find(r => r.id === S.round) || null; }
   S.round$ = round;
 
-  function render() {
+  async function render() {
     const v = window.Views[S.tab];
     const el = document.getElementById('view');
     if (!v) { el.innerHTML = '<div class="empty">준비 중입니다.</div>'; return; }
+    const r = round();
+    if (r && (!r.items || !r.items.length)) {          // 본문을 아직 안 받은 회차
+      el.innerHTML = '<div class="empty">' + r.title + ' 을 불러오는 중입니다.</div>';
+      try { await window.Store.ensureRound(r.id); }
+      catch (e) {
+        el.innerHTML = '<div class="empty">회차를 불러오지 못했습니다. 새로고침 후 다시 시도해 주십시오.<br>' + String(e.message || e) + '</div>';
+        return;
+      }
+    }
     el.innerHTML = '';
     v.render(el, round(), S.staff);
     window.scrollTo(0, 0);
@@ -42,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912h';
+      s.src = 'data/rounds.js?v=20260912i';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -56,6 +65,8 @@
     document.getElementById('shell').hidden = false;
     document.getElementById('whoPill').textContent = name;
 
+    const view = document.getElementById('view');
+    view.innerHTML = '<div class="empty">자료를 불러오는 중입니다.</div>';
     await loadLocalRounds();
     await window.Store.load();
 
