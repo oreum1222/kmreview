@@ -42,7 +42,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912b';
+      s.src = 'data/rounds.js?v=20260912c';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -74,6 +74,24 @@
     render();
   }
 
+  /* 페이지가 뜨자마자 서버가 살아 있는지 확인해 한 줄로 보여 준다 */
+  async function ping() {
+    const el = document.getElementById('gatePing');
+    if (!el || !window.CONFIG.SCRIPT_URL) return;
+    el.textContent = '서버 확인 중';
+    try {
+      const r = await fetch(window.CONFIG.SCRIPT_URL + '?action=ping', { cache: 'no-store' });
+      const t = await r.text();
+      el.textContent = (r.status === 200 && t.indexOf('{') === 0)
+        ? '서버 연결됨'
+        : '서버 응답 이상 (' + r.status + ')';
+      el.style.color = t.indexOf('{') === 0 ? 'var(--accent)' : 'var(--warn)';
+    } catch (e) {
+      el.textContent = '서버에 닿지 못함 · ' + String(e).slice(0, 90);
+      el.style.color = 'var(--err)';
+    }
+  }
+
   /* 무엇이 막혔는지 화면에서 바로 확인할 수 있게 한다 */
   function showDiag(err) {
     if (document.getElementById('diagBtn')) return;
@@ -99,7 +117,10 @@
     err.parentNode.appendChild(b);
   }
 
+  let gateReady = false;
   function initGate() {
+    if (gateReady) return;
+    gateReady = true;
     const sel = document.getElementById('gateName');
     window.CONFIG.STAFF.forEach(n => {
       const o = document.createElement('option');
@@ -136,6 +157,7 @@
       enter(sel.value);
     };
     document.getElementById('gateGo').onclick = go;
+    ping();
     document.getElementById('gatePin').onkeydown = e => { if (e.key === 'Enter') go(); };
     document.getElementById('logout').onclick = () => {
       sessionStorage.removeItem('kmr-staff');
@@ -143,5 +165,7 @@
     };
   }
 
-  document.addEventListener('DOMContentLoaded', initGate);
+  /* 스크립트가 DOMContentLoaded 뒤에 실행되면 이 줄이 없을 때 버튼이 죽은 채로 남는다 */
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initGate);
+  else initGate();
 })();
