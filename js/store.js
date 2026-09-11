@@ -22,7 +22,8 @@
 
   /* 어떤 브라우저에서는 fetch 가 응답도 오류도 없이 매달린다.
      그래서 시간 제한을 걸고, 그래도 안 되면 script 태그로 받아 온다(JSONP). */
-  const TIMEOUT = 9000;
+  const TIMEOUT = 5000;
+  let preferJsonp = false;   // 한 번 막히면 그 뒤로는 바로 우회 통로를 쓴다
   function note(m) { if (window.__kmlog) window.__kmlog(m); }
 
   function withUrl(params) {
@@ -64,30 +65,31 @@
   }
 
   async function get(params) {
-    const url = withUrl(params).toString();
-    for (let i = 0; i < 2; i++) {
-      try { return await fetchOnce(url, { cache: 'no-store' }); }
-      catch (e) { note('직접 요청 ' + (i + 1) + '차 실패: ' + String(e.message || e).slice(0, 60)); }
+    if (!preferJsonp) {
+      try { return await fetchOnce(withUrl(params).toString(), { cache: 'no-store' }); }
+      catch (e) { note('직접 요청 실패: ' + String(e.message || e).slice(0, 60) + ' · 우회 통로로'); }
     }
-    note('우회 통로로 다시 시도');
-    return await jsonp(params);
+    const r = await jsonp(params);
+    preferJsonp = true;
+    return r;
   }
 
   async function post(body) {
-    const payload = JSON.stringify(Object.assign({ pin: PIN }, body));
-    for (let i = 0; i < 2; i++) {
+    if (!preferJsonp) {
       try {
         return await fetchOnce(window.CONFIG.SCRIPT_URL, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: payload
+          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(Object.assign({ pin: PIN }, body))
         });
-      } catch (e) { note('저장 ' + (i + 1) + '차 실패: ' + String(e.message || e).slice(0, 60)); }
+      } catch (e) { note('저장 실패: ' + String(e.message || e).slice(0, 60) + ' · 우회 통로로'); }
     }
     // 저장도 우회 통로로. 길이가 감당되는 것만 보낸다.
     if (body.action === 'save') {
       const p = JSON.stringify(body.payload || {});
       if (p.length < 6000) {
-        note('저장을 우회 통로로 다시 시도');
-        return await jsonp({ pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p });
+        const r = await jsonp({ pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p });
+        preferJsonp = true;
+        return r;
       }
     }
     throw new Error('저장 실패');
