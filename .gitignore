@@ -1,0 +1,4 @@
+# 시험지 내용은 공개 저장소에 올리지 않는다. 회차는 구글시트 백엔드에서 받는다.
+data/rounds.js
+data/*.json
+node_modules/
