@@ -22,8 +22,8 @@
 
   /* 어떤 브라우저에서는 fetch 가 응답도 오류도 없이 매달린다.
      그래서 시간 제한을 걸고, 그래도 안 되면 script 태그로 받아 온다(JSONP). */
-  const TIMEOUT = 5000;
-  let preferJsonp = false;   // 한 번 막히면 그 뒤로는 바로 우회 통로를 쓴다
+  const HEDGE_AFTER = 6000;    // 직접 요청이 이만큼 조용하면 우회 통로도 함께 띄운다
+  const BUDGET = 90000;        // 둘 다 이만큼까지 기다린다
   function note(m) { if (window.__kmlog) window.__kmlog(m); }
 
   function withUrl(params) {
@@ -32,31 +32,23 @@
     return u;
   }
 
-  /* 시간 제한은 fetch 의 협조에 기대지 않는다. 무조건 끊는다. */
-  function fetchOnce(url, opts) {
-    const ac = new AbortController();
-    let timer;
-    const ticking = new Promise((_, rej) => {
-      timer = setTimeout(() => { try { ac.abort(); } catch (e) { } rej(new Error('응답 없음')); }, TIMEOUT);
-    });
-    const run = (async () => {
-      const r = await fetch(url, Object.assign({ signal: ac.signal }, opts));
+  function viaFetch(url, opts) {
+    return (async () => {
+      const r = await fetch(url, opts);
       const t = await r.text();
       try { return JSON.parse(t); }
       catch (pe) { throw new Error('JSON 아님 ' + r.status); }
     })();
-    return Promise.race([run, ticking]).finally(() => clearTimeout(timer));
   }
 
   let jsonpN = 0;
-  function jsonp(params) {
+  function viaScript(params) {
     return new Promise((res, rej) => {
       const cb = '__kmcb' + (++jsonpN);
       const u = withUrl(params);
       u.searchParams.set('callback', cb);
       const el = document.createElement('script');
-      const timer = setTimeout(() => { done(); rej(new Error('우회 통로 시간 초과')); }, 30000);
-      function done() { clearTimeout(timer); try { delete window[cb]; } catch (e) { } el.remove(); }
+      function done() { try { delete window[cb]; } catch (e) { } el.remove(); }
       window[cb] = d => { done(); res(d); };
       el.onerror = () => { done(); rej(new Error('우회 통로 실패')); };
       el.src = u.toString();
@@ -64,53 +56,58 @@
     });
   }
 
-  async function get(params) {
-    if (!preferJsonp) {
-      try { return await fetchOnce(withUrl(params).toString(), { cache: 'no-store' }); }
-      catch (e) { note('직접 요청 실패: ' + String(e.message || e).slice(0, 60) + ' · 우회 통로로'); }
-    }
-    const r = await jsonp(params);
-    preferJsonp = true;
-    return r;
+  /* 두 통로를 함께 띄우고 먼저 오는 쪽을 쓴다. 하나가 멈춰도 다른 쪽이 살린다. */
+  function ask(params, postBody) {
+    const url = postBody ? window.CONFIG.SCRIPT_URL : withUrl(params).toString();
+    const opts = postBody
+      ? { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: postBody }
+      : { cache: 'no-store' };
+
+    return new Promise((resolve, reject) => {
+      let settled = false, hedged = false;
+      const finish = v => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); resolve(v); } };
+      const fail = e => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); reject(e); } };
+
+      viaFetch(url, opts).then(finish, e => {
+        note('직접 요청 실패: ' + String(e.message || e).slice(0, 50));
+        if (!hedged) { hedged = true; viaScript(params).then(finish, fail); }
+      });
+
+      const hedge = setTimeout(() => {
+        if (settled || hedged) return;
+        hedged = true;
+        note('응답이 늦어 우회 통로도 함께 시도');
+        viaScript(params).then(finish, () => { });
+      }, HEDGE_AFTER);
+
+      const cap = setTimeout(() => fail(new Error('서버가 응답하지 않습니다')), BUDGET);
+    });
   }
 
+  async function get(params) { return await ask(params, null); }
+
   async function post(body) {
-    if (!preferJsonp) {
-      try {
-        return await fetchOnce(window.CONFIG.SCRIPT_URL, {
-          method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(Object.assign({ pin: PIN }, body))
-        });
-      } catch (e) { note('저장 실패: ' + String(e.message || e).slice(0, 60) + ' · 우회 통로로'); }
-    }
-    // 저장도 우회 통로로. 길이가 감당되는 것만 보낸다.
-    if (body.action === 'save') {
-      const p = JSON.stringify(body.payload || {});
-      if (p.length < 6000) {
-        const r = await jsonp({ pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p });
-        preferJsonp = true;
-        return r;
-      }
-    }
-    throw new Error('저장 실패');
+    const p = JSON.stringify(body.payload || {});
+    const fallback = (body.action === 'save' && p.length < 6000)
+      ? { pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p }
+      : { pin: PIN, action: 'auth' };
+    return await ask(fallback, JSON.stringify(Object.assign({ pin: PIN }, body)));
   }
 
   async function load() {
     localLoad();
     if (!live()) return db;
-    try {
-      const rec = await get({ action: 'records', pin: PIN });
-      if (rec && rec.ok) {
-        db.answers = Object.assign({}, db.answers, rec.answers || {});
-        db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
-        localSave();
-      }
-    } catch (e) { note('기록 불러오기 실패: ' + String(e.message || e).slice(0, 60)); }
-    try {
-      const lst = await get({ action: 'roundlist', pin: PIN });
-      if (lst && lst.ok && lst.rounds)
-        window.Rounds = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-    } catch (e) { note('회차 목록 실패: ' + String(e.message || e).slice(0, 60)); }
+    const [rec, lst] = await Promise.all([
+      get({ action: 'records', pin: PIN }).catch(e => { note('기록 실패: ' + String(e.message || e).slice(0, 50)); return null; }),
+      get({ action: 'roundlist', pin: PIN }).catch(e => { note('회차 목록 실패: ' + String(e.message || e).slice(0, 50)); return null; })
+    ]);
+    if (rec && rec.ok) {
+      db.answers = Object.assign({}, db.answers, rec.answers || {});
+      db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
+      localSave();
+    }
+    if (lst && lst.ok && lst.rounds)
+      window.Rounds = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
     return db;
   }
 
