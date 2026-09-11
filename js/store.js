@@ -31,15 +31,20 @@
     return u;
   }
 
-  async function fetchOnce(url, opts) {
+  /* 시간 제한은 fetch 의 협조에 기대지 않는다. 무조건 끊는다. */
+  function fetchOnce(url, opts) {
     const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), TIMEOUT);
-    try {
+    let timer;
+    const ticking = new Promise((_, rej) => {
+      timer = setTimeout(() => { try { ac.abort(); } catch (e) { } rej(new Error('응답 없음')); }, TIMEOUT);
+    });
+    const run = (async () => {
       const r = await fetch(url, Object.assign({ signal: ac.signal }, opts));
       const t = await r.text();
       try { return JSON.parse(t); }
       catch (pe) { throw new Error('JSON 아님 ' + r.status); }
-    } finally { clearTimeout(timer); }
+    })();
+    return Promise.race([run, ticking]).finally(() => clearTimeout(timer));
   }
 
   let jsonpN = 0;
