@@ -72,11 +72,12 @@
 
       viaFetch(url, opts).then(finish, e => {
         note('직접 요청 실패: ' + String(e.message || e).slice(0, 50));
+        if (!params) return fail(e);                      // 우회 통로로는 못 하는 요청
         if (!hedged) { hedged = true; viaScript(params).then(finish, fail); }
       });
 
       const hedge = setTimeout(() => {
-        if (settled || hedged) return;
+        if (settled || hedged || !params) return;
         hedged = true;
         note('응답이 늦어 우회 통로도 함께 시도');
         viaScript(params).then(finish, () => { });
@@ -90,10 +91,11 @@
 
   async function post(body) {
     const p = JSON.stringify(body.payload || {});
+    // 우회 통로(GET)로도 할 수 있는 요청만 대체 경로를 준다. 나머지는 직접 요청만 쓴다.
     const fallback = (body.action === 'save' && p.length < 6000)
       ? { pin: PIN, action: 'save', kind: body.kind, round: body.round, staff: body.staff, payload: p }
-      : { pin: PIN, action: 'auth' };
-    return await ask(fallback, JSON.stringify(Object.assign({ pin: PIN }, body)));
+      : null;
+    return await ask(fallback, JSON.stringify(Object.assign({ pin: PIN, user: USER }, body)));
   }
 
   async function load() {
@@ -197,5 +199,13 @@
 
   async function ping() { return await get({ action: 'ping' }); }
 
-  window.Store = { load, ping, ensureRound, setUser, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
+  /* 검수 타임라인 */
+  async function timelineList() {
+    const r = await get({ action: 'timeline', pin: PIN });
+    return (r && r.ok && r.timeline) ? r.timeline : [];
+  }
+  async function timelineAdd(entries) { return await post({ action: 'timelineAdd', entries: entries }); }
+  async function timelineDelete(id) { return await post({ action: 'timelineDelete', id: id }); }
+
+  window.Store = { load, ping, ensureRound, setUser, timelineList, timelineAdd, timelineDelete, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
 })();

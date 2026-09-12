@@ -7,7 +7,8 @@ var TABS = {
   answers: ['round', 'staff', 'payload', 'ts'],
   reviews: ['round', 'staff', 'payload', 'ts'],
   rounds:  ['id', 'title', 'date', 'seq', 'chunk', 'ts'],  // 시트 셀은 5만 자가 한계라 회차 JSON을 쪼개 담는다
-  staff:   ['name', 'pin', 'ts']                           // 조교별 PIN. 저장소가 아니라 여기에만 둔다
+  staff:   ['name', 'pin', 'ts'],                          // 조교별 PIN. 저장소가 아니라 여기에만 둔다
+  timeline: ['id', 'date', 'staff', 'round', 'method', 'note', 'by', 'ts']   // 누가 언제 어떤 방식으로 검수했는지
 };
 var RECORD_TABS = ['answers', 'reviews'];
 
@@ -81,6 +82,16 @@ function doGet(e) {
   }
 
   if (p.action === 'auth') return json_({ ok: true }, cb);          // PIN 확인만
+
+  if (p.action === 'timeline') {
+    var tl = [], tr = sheet_('timeline').getDataRange().getValues();
+    for (var i4 = 1; i4 < tr.length; i4++) {
+      if (!tr[i4][0]) continue;
+      tl.push({ id: tr[i4][0], date: String(tr[i4][1]), staff: tr[i4][2], round: tr[i4][3],
+                method: tr[i4][4], note: tr[i4][5], by: tr[i4][6] });
+    }
+    return json_({ ok: true, timeline: tl }, cb);
+  }
 
   if (p.action === 'records') {                                      // 답안과 검수 기록만
     var rec = { ok: true, answers: {}, reviews: {} };
@@ -180,6 +191,22 @@ function doPost(e) {
         done++;
       });
       return json_({ ok: true, saved: done });
+    }
+    if (body.action === 'timelineAdd') {
+      var tls = sheet_('timeline'), now3 = new Date(), n3 = 0;
+      (body.entries || []).forEach(function (m) {
+        tls.appendRow([Utilities.getUuid().slice(0, 8), String(m.date || ''), m.staff || '',
+                       m.round || '', m.method || '', m.note || '', body.user || '', now3]);
+        n3++;
+      });
+      return json_({ ok: true, added: n3 });
+    }
+    if (body.action === 'timelineDelete') {
+      var tld = sheet_('timeline'), trd = tld.getDataRange().getValues(), cutd = 0;
+      for (var z = trd.length - 1; z >= 1; z--) {
+        if (String(trd[z][0]) === String(body.id)) { tld.deleteRow(z + 1); cutd++; }
+      }
+      return json_({ ok: true, deleted: cutd });
     }
     if (body.action === 'deleteRound') {
       var ds = sheet_('rounds');

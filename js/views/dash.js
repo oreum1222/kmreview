@@ -110,7 +110,12 @@ window.Views.dash = (function () {
           '<div class="bar"><i style="width:' + Math.round(d / tot * 100) + '%"></i></div></td></tr>';
       }).join('') + '</tbody></table></div>' : '<div class="muted">기록이 없습니다.</div>';
 
-    /* 내보내기 */
+    /* 검수 타임라인 */
+    const c5 = card('검수 타임라인', el);
+    c5.innerHTML = '<div class="muted tiny">불러오는 중</div>';
+    paintTimeline(c5, round, ans, revs);
+
+        /* 내보내기 */
     const bar = document.createElement('div');
     bar.className = 'sticky-bar';
     const sp = document.createElement('div'); sp.className = 'spacer';
@@ -122,6 +127,95 @@ window.Views.dash = (function () {
       bar.appendChild(b);
     });
     el.appendChild(bar);
+  }
+
+  const METHODS = [
+    '직접 풀고 검수',
+    '답안 보고 검수',
+    '문제지와 해설지 대조만',
+    '기타'
+  ];
+
+  async function paintTimeline(box, round, ans, revs) {
+    let rows = [];
+    try { rows = await window.Store.timelineList(); }
+    catch (e) { box.innerHTML = '<div class="muted tiny">타임라인을 불러오지 못했습니다.</div>'; return; }
+    rows.sort((a, b) => String(b.date).localeCompare(String(a.date)) || String(a.staff).localeCompare(String(b.staff)));
+
+    box.innerHTML = '';
+
+    /* 기록 추가 */
+    const form = document.createElement('div');
+    form.className = 'tlform';
+    const today = new Date();
+    const ymd = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+    form.innerHTML =
+      '<input type="date" id="tlDate" value="' + ymd + '">' +
+      '<select id="tlStaff">' + window.CONFIG.STAFF.map(n => '<option>' + esc(n) + '</option>').join('') + '</select>' +
+      '<select id="tlRound">' + (window.Rounds || []).map(r => '<option value="' + esc(r.id) + '">' + esc(r.title) + '</option>').join('') + '</select>' +
+      '<select id="tlMethod">' + METHODS.map(m => '<option>' + m + '</option>').join('') + '</select>' +
+      '<input id="tlNote" placeholder="비고">';
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn pri sm';
+    addBtn.textContent = '기록 추가';
+    addBtn.onclick = async () => {
+      addBtn.disabled = true; addBtn.textContent = '저장 중';
+      try {
+        await window.Store.timelineAdd([{
+          date: document.getElementById('tlDate').value,
+          staff: document.getElementById('tlStaff').value,
+          round: document.getElementById('tlRound').value,
+          method: document.getElementById('tlMethod').value,
+          note: document.getElementById('tlNote').value
+        }]);
+        await paintTimeline(box, round, ans, revs);
+      } catch (e) {
+        addBtn.disabled = false; addBtn.textContent = '기록 추가';
+        alert('저장하지 못했습니다. ' + (e.message || e));
+      }
+    };
+    form.appendChild(addBtn);
+    box.appendChild(form);
+
+    /* 기록 목록 */
+    const titleOf = id => ((window.Rounds || []).find(r => r.id === id) || {}).title || id;
+    const wrap = document.createElement('div');
+    wrap.className = 'scroll';
+    wrap.innerHTML = rows.length
+      ? '<table><thead><tr><th>날짜</th><th>조교</th><th>회차</th><th>방식</th><th>비고</th><th></th></tr></thead><tbody>' +
+        rows.map(r => '<tr><td class="nowrap">' + esc(r.date) + '</td><td class="nowrap">' + esc(r.staff) + '</td>' +
+          '<td class="nowrap">' + esc(titleOf(r.round)) + '</td>' +
+          '<td class="nowrap"><span class="mtag ' + (r.method === '직접 풀고 검수' ? 'ok' : 'bad') + '">' + esc(r.method) + '</span></td>' +
+          '<td>' + esc(r.note) + '</td>' +
+          '<td><button class="btn sm" data-del="' + esc(r.id) + '">삭제</button></td></tr>').join('') +
+        '</tbody></table>'
+      : '<div class="muted tiny">아직 기록이 없습니다.</div>';
+    wrap.querySelectorAll('[data-del]').forEach(b => {
+      b.onclick = async () => {
+        if (!confirm('이 기록을 지웁니다.')) return;
+        b.disabled = true;
+        await window.Store.timelineDelete(b.dataset.del);
+        await paintTimeline(box, round, ans, revs);
+      };
+    });
+    box.appendChild(wrap);
+
+    /* 시스템이 본 실제 흔적 */
+    const seen = [];
+    ans.forEach(a => {
+      const filled = Object.keys(a.rec.subs || {}).filter(k => (a.rec.subs[k].a || '').trim()).length;
+      if (filled) seen.push(a.staff + ' — 이 시스템에 답안 ' + filled + '개 입력' + (a.rec.submitted ? ', 제출함' : ', 미제출'));
+    });
+    revs.forEach(r => {
+      const d = Object.keys(r.rec.q || {}).reduce((x, k) => x + Object.keys(r.rec.q[k]).filter(i => r.rec.q[k][i] && r.rec.q[k][i].s).length, 0);
+      if (d) seen.push(r.staff + ' — 검수 ' + d + '항목 체크' + (r.rec.peek ? ' (답안 내기 전에 정답을 열어 봄)' : ''));
+    });
+    const note = document.createElement('div');
+    note.className = 'tlseen';
+    note.innerHTML = '<b>이 회차에서 시스템이 본 것</b>' +
+      (seen.length ? '<ul>' + seen.map(x => '<li>' + esc(x) + '</li>').join('') + '</ul>'
+                   : '<div class="muted tiny">이 회차에는 기록이 없습니다.</div>');
+    box.appendChild(note);
   }
 
   function kpi(label, val, color) {
