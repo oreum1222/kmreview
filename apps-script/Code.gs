@@ -30,7 +30,10 @@ function okPin_(pin, name) {
   if (!pin) return false;
   if (pin === pin_()) return true;
   var mine = staffPin_(name);
-  return !!mine && pin === mine;
+  if (!mine) return false;
+  if (pin === mine) return true;
+  // 시트가 앞자리 0 을 지워 버린 경우까지 받아 준다
+  return String(Number(pin)) === String(Number(mine)) && /^\d+$/.test(pin) && /^\d+$/.test(mine);
 }
 function sheet_(name) {
   var s = ss_().getSheetByName(name);
@@ -190,6 +193,7 @@ function doPost(e) {
     if (body.action === 'setStaff') {                  // 마스터 PIN 으로만 조교 PIN 을 등록한다
       if (body.pin !== pin_()) return json_({ ok: false, error: 'master' });
       var ts = sheet_('staff');
+      ts.getRange(1, 2, ts.getMaxRows(), 1).setNumberFormat('@');   // 0 으로 시작하는 PIN 이 숫자로 바뀌지 않게
       var trows = ts.getDataRange().getValues();
       var list = body.staff || [], done = 0;
       list.forEach(function (m) {
