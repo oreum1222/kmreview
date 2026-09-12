@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260913c';
+      s.src = 'data/rounds.js?v=20260913d';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -68,6 +68,8 @@
     shellEl.hidden = false;
     shellEl.style.display = '';
     document.getElementById('whoPill').textContent = name;
+
+    showNotice();
 
     const view = document.getElementById('view');
     view.innerHTML = '<div class="empty">자료를 불러오는 중입니다.</div>';
@@ -87,6 +89,26 @@
 
     paintNav();
     render();
+  }
+
+  /* 로그인 직후 주의사항을 한 번 띄운다 */
+  function showNotice() {
+    const box = document.getElementById('notice');
+    const list = (window.CONFIG.NOTICE || []);
+    if (!box || !list.length) return;
+    document.getElementById('noticeTitle').textContent = window.CONFIG.NOTICE_TITLE || '주의사항';
+    const ol = document.getElementById('noticeList');
+    ol.innerHTML = '';
+    list.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = t;
+      ol.appendChild(li);
+    });
+    box.hidden = false;
+    box.style.display = 'flex';
+    const go = document.getElementById('noticeGo');
+    go.onclick = () => { box.hidden = true; box.style.display = 'none'; };
+    go.focus();
   }
 
   /* 페이지가 뜨자마자 서버가 살아 있는지 확인해 한 줄로 보여 준다 */

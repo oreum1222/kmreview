@@ -47,6 +47,17 @@ function setup() {
   return '시트 준비 완료';
 }
 
+function ymd_(v) {   // 시트가 날짜로 바꿔 버린 값을 yyyy-MM-dd 로 되돌린다
+  if (v === '' || v === null || v === undefined) return '';
+  if (Object.prototype.toString.call(v) === '[object Date]')
+    return Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+  var t = String(v).trim();
+  var m = t.match(/^(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})/);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  var d = new Date(t);
+  return isNaN(d.getTime()) ? t : Utilities.formatDate(d, 'Asia/Seoul', 'yyyy-MM-dd');
+}
+
 function json_(o, cb) {
   // fetch 가 막히는 환경에서는 script 태그로 받아 간다(JSONP)
   if (cb && /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(cb)) {
@@ -87,7 +98,7 @@ function doGet(e) {
     var tl = [], tr = sheet_('timeline').getDataRange().getValues();
     for (var i4 = 1; i4 < tr.length; i4++) {
       if (!tr[i4][0]) continue;
-      tl.push({ id: tr[i4][0], date: String(tr[i4][1]), staff: tr[i4][2], round: tr[i4][3],
+      tl.push({ id: tr[i4][0], date: ymd_(tr[i4][1]), staff: tr[i4][2], round: tr[i4][3],
                 method: tr[i4][4], note: tr[i4][5], by: tr[i4][6] });
     }
     return json_({ ok: true, timeline: tl }, cb);
@@ -194,6 +205,7 @@ function doPost(e) {
     }
     if (body.action === 'timelineAdd') {
       var tls = sheet_('timeline'), now3 = new Date(), n3 = 0;
+      tls.getRange(1, 2, tls.getMaxRows(), 1).setNumberFormat('@');   // 날짜 칸은 글자로 둔다
       (body.entries || []).forEach(function (m) {
         tls.appendRow([Utilities.getUuid().slice(0, 8), String(m.date || ''), m.staff || '',
                        m.round || '', m.method || '', m.note || '', body.user || '', now3]);
