@@ -6,15 +6,30 @@ var SHEET_ID = '';   // 비우면 이 스크립트가 붙어 있는 시트를 �
 var TABS = {
   answers: ['round', 'staff', 'payload', 'ts'],
   reviews: ['round', 'staff', 'payload', 'ts'],
-  rounds:  ['id', 'title', 'date', 'seq', 'chunk', 'ts']   // 시트 셀은 5만 자가 한계라 회차 JSON을 쪼개 담는다
+  rounds:  ['id', 'title', 'date', 'seq', 'chunk', 'ts'],  // 시트 셀은 5만 자가 한계라 회차 JSON을 쪼개 담는다
+  staff:   ['name', 'pin', 'ts']                           // 조교별 PIN. 저장소가 아니라 여기에만 둔다
 };
 var RECORD_TABS = ['answers', 'reviews'];
 
 function ss_() {
   return SHEET_ID ? SpreadsheetApp.openById(SHEET_ID) : SpreadsheetApp.getActiveSpreadsheet();
 }
-function pin_() {
+function pin_() {   // 마스터 PIN. 누구 이름으로든 들어갈 수 있다.
   return PropertiesService.getScriptProperties().getProperty('REVIEW_PIN') || '7452';
+}
+function staffPin_(name) {
+  if (!name) return '';
+  var rows = sheet_('staff').getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]).trim() === String(name).trim()) return String(rows[i][1]).trim();
+  }
+  return '';
+}
+function okPin_(pin, name) {
+  if (!pin) return false;
+  if (pin === pin_()) return true;
+  var mine = staffPin_(name);
+  return !!mine && pin === mine;
 }
 function sheet_(name) {
   var s = ss_().getSheetByName(name);
@@ -44,7 +59,7 @@ function json_(o, cb) {
 function doGet(e) {
   var p = e.parameter || {};
   var cb = p.callback || '';
-  if (p.pin !== pin_()) return json_({ ok: false, error: 'pin' }, cb);
+  if (!okPin_(p.pin, p.user)) return json_({ ok: false, error: 'pin' }, cb);
 
   // POST 가 막히는 환경을 위한 저장 통로
   if (p.action === 'save' && RECORD_TABS.indexOf(p.kind) !== -1) {
@@ -131,7 +146,7 @@ function doGet(e) {
 function doPost(e) {
   var body;
   try { body = JSON.parse(e.postData.contents); } catch (err) { return json_({ ok: false, error: 'body' }); }
-  if (body.pin !== pin_()) return json_({ ok: false, error: 'pin' });
+  if (!okPin_(body.pin, body.user)) return json_({ ok: false, error: 'pin' });
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
   try {
@@ -149,6 +164,22 @@ function doPost(e) {
       }
       rs.getRange(rs.getLastRow() + 1, 1, add.length, 6).setValues(add);
       return json_({ ok: true, saved: true, chunks: add.length, items: (rd.items || []).length });
+    }
+    if (body.action === 'setStaff') {                  // 마스터 PIN 으로만 조교 PIN 을 등록한다
+      if (body.pin !== pin_()) return json_({ ok: false, error: 'master' });
+      var ts = sheet_('staff');
+      var trows = ts.getDataRange().getValues();
+      var list = body.staff || [], done = 0;
+      list.forEach(function (m) {
+        var found = -1;
+        for (var t = 1; t < trows.length; t++) {
+          if (String(trows[t][0]).trim() === String(m.name).trim()) { found = t; break; }
+        }
+        if (found > 0) ts.getRange(found + 1, 1, 1, 3).setValues([[m.name, String(m.pin), new Date()]]);
+        else ts.appendRow([m.name, String(m.pin), new Date()]);
+        done++;
+      });
+      return json_({ ok: true, saved: done });
     }
     if (body.action === 'deleteRound') {
       var ds = sheet_('rounds');

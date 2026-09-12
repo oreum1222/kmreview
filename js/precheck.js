@@ -157,6 +157,15 @@
           add('warn', 'E3', q.no, s.no, '채점기준이 비어 있습니다.');
         }
 
+        /* D5 — 문제지에 적힌 답과 해설지 정답이 어긋나는가 */
+        if (s.paperAnswer && s.haeseolAnswer) {
+          const a = norm(s.paperAnswer).replace(/[‘’'"“”.,]/g, '');
+          const b = norm(s.haeseolAnswer).replace(/[‘’'"“”.,]/g, '');
+          if (a !== b && b.indexOf(a) === -1 && a.indexOf(b) === -1)
+            add('error', 'D5', q.no, s.no, '문제지에 적힌 답과 해설지 정답이 다릅니다. 문제지 "' +
+              s.paperAnswer.slice(0, 40) + '" / 해설지 "' + s.haeseolAnswer.slice(0, 40) + '"');
+        }
+
         /* D1 — 발문 규약 */
         if (s.balmun) {
           if (/서술하시오|설명하시오|논하시오/.test(s.balmun))

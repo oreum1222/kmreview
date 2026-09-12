@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260912m';
+      s.src = 'data/rounds.js?v=20260913a';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -168,6 +168,7 @@
       let r;
       try {
         log('서버에 확인 요청');
+        window.Store.setUser(sel.value);
         r = await window.Store.verify(pin);
         log('응답 ' + JSON.stringify(r));
       } catch (e) {
@@ -179,7 +180,7 @@
       err.style.color = 'var(--err)';
       if (!r || !r.ok) {
         err.textContent = (r && r.reason === 'pin')
-          ? 'PIN이 맞지 않습니다.'
+          ? '이름과 PIN이 맞지 않습니다.'
           : '서버에 연결하지 못했습니다. 잠시 뒤 다시 눌러 보십시오.';
         showDiag(err);
         return;

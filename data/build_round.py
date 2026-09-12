@@ -58,11 +58,20 @@ def parse_questions(L, start, end, gyeyeol):
             score = float(sm.group(1)) if sm else None
             balmun = SCORE.sub('', txt).strip()
             nxt = subidx[j + 1] if j + 1 < len(subidx) else stop
-            extra = '\n'.join(x for x in (L[i].strip() for i in range(si + 1, nxt)) if x)
+            lines = [x for x in (L[i].strip() for i in range(si + 1, nxt)) if x]
+            # 문제지에는 소문항마다 '선행학습보고서 ... 변형' 다음 줄에 답이 적혀 있다
+            cut = next((k for k, x in enumerate(lines)
+                        if x.startswith('선행학습보고서') or x.startswith('출제 근거')), None)
+            if cut is None:
+                bogi, note, paper = '\n'.join(lines), '', ''
+            else:
+                bogi = '\n'.join(lines[:cut])
+                note = lines[cut]
+                paper = '\n'.join(lines[cut + 1:]).strip()
             subs.append({
                 'no': '(%s)' % n, 'balmun': balmun, 'score': score,
                 'kind': kind_of(balmun), 'jogeon': jogeon_of(balmun),
-                'bogi': extra,
+                'bogi': bogi, 'sourceNote': note, 'paperAnswer': paper,
             })
         qs.append({'no': no, 'gyeyeol': gyeyeol,
                    'passages': [{'label': '', 'text': passage}], 'subs': subs})
@@ -127,9 +136,11 @@ def build(path, rid, title, date):
     for q, blk in zip(qs, hb):
         for s in q['subs']:
             d = blk.get(s['no'], {})
-            s['answer'] = d.get('answer', '')
+            s['haeseolAnswer'] = d.get('answer', '')
             s['haeseol'] = d.get('haeseol', '')
             s['rubricText'] = d.get('rubric', '')
+            # 채점 기준은 문제지에 적힌 답이 우선이다. 해설지가 아직 안 고쳐진 회차가 있다.
+            s['answer'] = s.get('paperAnswer') or s['haeseolAnswer']
     return {'id': rid, 'title': title, 'date': date, 'items': qs}
 
 if __name__ == '__main__':

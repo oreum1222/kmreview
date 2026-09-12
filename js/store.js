@@ -2,8 +2,9 @@
 (function () {
   const KEY = () => window.CONFIG.STORAGE_KEY;
   const live = () => !!window.CONFIG.SCRIPT_URL;
-  let PIN = '';
+  let PIN = '', USER = '';
   function setPin(p) { PIN = p; }
+  function setUser(n) { USER = n; }
 
   const empty = () => ({ answers: {}, reviews: {} });   // key: round + '||' + staff
   let db = empty();
@@ -28,6 +29,7 @@
 
   function withUrl(params) {
     const u = new URL(window.CONFIG.SCRIPT_URL);
+    if (USER) u.searchParams.set('user', USER);
     Object.keys(params).forEach(k => u.searchParams.set(k, params[k]));
     return u;
   }
@@ -195,5 +197,5 @@
 
   async function ping() { return await get({ action: 'ping' }); }
 
-  window.Store = { load, ping, ensureRound, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
+  window.Store = { load, ping, ensureRound, setUser, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
 })();
