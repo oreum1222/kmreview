@@ -159,8 +159,13 @@
 
         /* D5 — 문제지에 적힌 답과 해설지 정답이 어긋나는가 */
         if (s.paperAnswer && s.haeseolAnswer) {
-          const a = norm(s.paperAnswer).replace(/[‘’'"“”.,]/g, '');
-          const b = norm(s.haeseolAnswer).replace(/[‘’'"“”.,]/g, '');
+          // 기호와 구분자, 따옴표는 지우고 알맹이만 견준다. 쉼표와 빗금 차이는 다른 답이 아니다.
+          const bare = x => String(x || '')
+            .replace(/[㉠-㉿ⓐ-ⓩ]/g, ' ')
+            .replace(/[‘’'"“”.,/·、;:：]/g, ' ')
+            .replace(/\s+/g, '').trim();
+          const a = bare(s.paperAnswer);
+          const b = bare(s.haeseolAnswer);
           if (a !== b && b.indexOf(a) === -1 && a.indexOf(b) === -1)
             add('error', 'D5', q.no, s.no, '문제지에 적힌 답과 해설지 정답이 다릅니다. 문제지 "' +
               s.paperAnswer.slice(0, 40) + '" / 해설지 "' + s.haeseolAnswer.slice(0, 40) + '"');
