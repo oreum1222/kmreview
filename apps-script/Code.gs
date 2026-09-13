@@ -201,8 +201,11 @@ function doPost(e) {
         for (var t = 1; t < trows.length; t++) {
           if (String(trows[t][0]).trim() === String(m.name).trim()) { found = t; break; }
         }
-        if (found > 0) ts.getRange(found + 1, 1, 1, 3).setValues([[m.name, String(m.pin), new Date()]]);
-        else ts.appendRow([m.name, String(m.pin), new Date()]);
+        var row = found > 0 ? found + 1 : ts.getLastRow() + 1;
+        ts.getRange(row, 2).setNumberFormat('@');            // 먼저 글자 칸으로 만들고
+        ts.getRange(row, 1).setValue(m.name);
+        ts.getRange(row, 2).setValue(String(m.pin));         // 그 다음에 넣어야 0 이 안 날아간다
+        ts.getRange(row, 3).setValue(new Date());
         done++;
       });
       return json_({ ok: true, saved: done });
