@@ -122,32 +122,40 @@
     return await ask(fallback, JSON.stringify(Object.assign({ pin: PIN, user: USER }, body)));
   }
 
-  async function load() {
+  /* 회차 목록만 먼저 받는다. 이것만 오면 화면을 열 수 있다. */
+  async function loadRounds() {
     localLoad();
-    if (!live()) return db;
-
-    // 지난번에 받아 둔 것을 먼저 쓴다. 서버가 흔들려도 화면은 뜬다.
-    if (db.roundList && db.roundList.length) {
+    if (!live()) return;
+    if (db.roundList && db.roundList.length) {          // 지난번에 받아 둔 것으로 먼저 연다
       window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
-      note('저장해 둔 자료로 먼저 엽니다');
+      note('저장해 둔 회차 목록으로 먼저 엽니다');
     }
-
-    const [rec, lst] = await Promise.all([
-      get({ action: 'records', pin: PIN }).catch(e => { note('기록 실패: ' + String(e.message || e).slice(0, 40)); return null; }),
-      get({ action: 'roundlist', pin: PIN }).catch(e => { note('회차 목록 실패: ' + String(e.message || e).slice(0, 40)); return null; })
-    ]);
-    if (rec && rec.ok) {
-      db.answers = Object.assign({}, db.answers, rec.answers || {});
-      db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
-      localSave();
-    }
-    if (lst && lst.ok && lst.rounds) {
-      db.roundList = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
-      localSave();
-      window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
-    }
-    return db;
+    try {
+      const lst = await get({ action: 'roundlist', pin: PIN });
+      if (lst && lst.ok && lst.rounds) {
+        db.roundList = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        localSave();
+        window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
+      }
+    } catch (e) { note('회차 목록 실패: ' + String(e.message || e).slice(0, 40)); }
   }
+
+  /* 답안과 검수 기록은 뒤에서 받아 온다. 늦어도 화면은 이미 떠 있다. */
+  async function loadRecords() {
+    if (!live()) return false;
+    try {
+      const rec = await get({ action: 'records', pin: PIN });
+      if (rec && rec.ok) {
+        db.answers = Object.assign({}, db.answers, rec.answers || {});
+        db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
+        localSave();
+        return true;
+      }
+    } catch (e) { note('기록 실패: ' + String(e.message || e).slice(0, 40)); }
+    return false;
+  }
+
+  async function load() { await loadRounds(); return db; }
 
   /* 회차 본문은 고를 때 한 번만 받아 온다. 받은 것은 저장해 두고 다음부터 바로 쓴다. */
   async function ensureRound(id) {
@@ -262,5 +270,5 @@
   async function timelineAdd(entries) { return await post({ action: 'timelineAdd', entries: entries }); }
   async function timelineDelete(id) { return await post({ action: 'timelineDelete', id: id }); }
 
-  window.Store = { load, ping, ensureRound, setUser, timelineList, timelineAdd, timelineDelete, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
+  window.Store = { load, loadRounds, loadRecords, ping, ensureRound, setUser, timelineList, timelineAdd, timelineDelete, answers, reviews, setAnswers, setReviews, allAnswers, allReviews, flush, live, saveRound, setPin, verify };
 })();

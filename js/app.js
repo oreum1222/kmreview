@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260915e';
+      s.src = 'data/rounds.js?v=20260915f';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -74,7 +74,8 @@
     const view = document.getElementById('view');
     view.innerHTML = '<div class="empty">자료를 불러오는 중입니다.</div>';
     await loadLocalRounds();
-    await window.Store.load();
+    await window.Store.loadRounds();          // 목록만 기다린다
+    window.Store.loadRecords().then(ok => { if (ok) render(); });   // 기록은 뒤에서
 
     const sel = document.getElementById('roundSel');
     sel.innerHTML = '';
