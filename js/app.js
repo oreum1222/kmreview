@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260915f';
+      s.src = 'data/rounds.js?v=20260915g';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -68,6 +68,13 @@
     shellEl.hidden = false;
     shellEl.style.display = '';
     document.getElementById('whoPill').textContent = name;
+
+    if (window.__offline) {
+      const b = document.createElement('div');
+      b.className = 'offbar';
+      b.textContent = '서버에 닿지 못해 이 기기에 저장해 둔 자료로 열었습니다. 입력한 내용은 기기에 남고, 연결되면 올라갑니다.';
+      document.getElementById('shell').appendChild(b);
+    }
 
     showNotice();
 
@@ -209,7 +216,8 @@
         return;
       }
       err.textContent = '';
-      log('통과, 화면 준비 중');
+      log('통과, 화면 준비 중' + (r.offline ? ' (저장해 둔 자료)' : ''));
+      window.__offline = !!r.offline;
       enter(sel.value).catch(e => log('화면 준비 실패 ' + String(e).slice(0, 140)));
     };
     document.getElementById('gateGo').onclick = go;

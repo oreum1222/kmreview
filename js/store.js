@@ -241,17 +241,36 @@
   function allAnswers() { return db.answers; }
   function allReviews() { return db.reviews; }
 
+  /* 한 번 서버가 통과시킨 이름과 PIN 은 이 기기에 표시만 남겨 둔다(원문은 저장하지 않는다) */
+  function mark(name, pin) {
+    let h = 5381;
+    const t = String(name) + '|' + String(pin);
+    for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+    return 'kmr-ok-' + h.toString(36);
+  }
+
   /* {ok} 또는 {ok:false, reason:'pin'|'server'} */
   async function verify(pin) {
     setPin(pin);
     if (!live()) return pin === window.CONFIG.PIN ? { ok: true } : { ok: false, reason: 'pin' };
     try {
       const res = await get({ action: 'auth', pin: pin });
-      if (res && res.ok) return { ok: true };
+      if (res && res.ok) {
+        try { localStorage.setItem(mark(USER, pin), '1'); } catch (e) { }
+        return { ok: true };
+      }
       if (res && res.error === 'pin') return { ok: false, reason: 'pin' };
       return { ok: false, reason: 'server' };
     } catch (e) {
-      return { ok: false, reason: 'server' };   // 응답이 JSON 이 아니면 서버가 아직 준비되지 않은 것
+      // 서버에 못 닿았다. 전에 이 기기에서 통과한 적이 있으면 저장해 둔 자료로 연다.
+      let seen = false;
+      try { seen = localStorage.getItem(mark(USER, pin)) === '1'; } catch (e2) { }
+      localLoad();
+      if (seen && db.roundList && db.roundList.length) {
+        note('서버에 닿지 못해 저장해 둔 자료로 엽니다');
+        return { ok: true, offline: true };
+      }
+      return { ok: false, reason: 'server' };
     }
   }
 
