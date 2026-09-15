@@ -6,7 +6,7 @@
   function setPin(p) { PIN = p; }
   function setUser(n) { USER = n; }
 
-  const empty = () => ({ answers: {}, reviews: {} });   // key: round + '||' + staff
+  const empty = () => ({ answers: {}, reviews: {}, roundList: [], roundData: {} });   // key: round + '||' + staff
   let db = empty();
   let dirty = {};      // { 'answers||key': true }
   let timer = null;
@@ -16,6 +16,8 @@
     catch (e) { db = empty(); }
     if (!db.answers) db.answers = {};
     if (!db.reviews) db.reviews = {};
+    if (!db.roundList) db.roundList = [];
+    if (!db.roundData) db.roundData = {};
   }
   function localSave() {
     try { localStorage.setItem(KEY(), JSON.stringify(db)); } catch (e) { }
@@ -123,34 +125,65 @@
   async function load() {
     localLoad();
     if (!live()) return db;
+
+    // 지난번에 받아 둔 것을 먼저 쓴다. 서버가 흔들려도 화면은 뜬다.
+    if (db.roundList && db.roundList.length) {
+      window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
+      note('저장해 둔 자료로 먼저 엽니다');
+    }
+
     const [rec, lst] = await Promise.all([
-      get({ action: 'records', pin: PIN }).catch(e => { note('기록 실패: ' + String(e.message || e).slice(0, 50)); return null; }),
-      get({ action: 'roundlist', pin: PIN }).catch(e => { note('회차 목록 실패: ' + String(e.message || e).slice(0, 50)); return null; })
+      get({ action: 'records', pin: PIN }).catch(e => { note('기록 실패: ' + String(e.message || e).slice(0, 40)); return null; }),
+      get({ action: 'roundlist', pin: PIN }).catch(e => { note('회차 목록 실패: ' + String(e.message || e).slice(0, 40)); return null; })
     ]);
     if (rec && rec.ok) {
       db.answers = Object.assign({}, db.answers, rec.answers || {});
       db.reviews = Object.assign({}, db.reviews, rec.reviews || {});
       localSave();
     }
-    if (lst && lst.ok && lst.rounds)
-      window.Rounds = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    if (lst && lst.ok && lst.rounds) {
+      db.roundList = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      localSave();
+      window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
+    }
     return db;
   }
 
-  /* 회차 본문은 고를 때 한 번만 받아 온다 */
-  const roundCache = {};
+  /* 회차 본문은 고를 때 한 번만 받아 온다. 받은 것은 저장해 두고 다음부터 바로 쓴다. */
   async function ensureRound(id) {
     if (!id) return null;
     const cur = (window.Rounds || []).find(r => r.id === id);
     if (cur && cur.items && cur.items.length) return cur;
-    if (roundCache[id]) return roundCache[id];
+
+    if (db.roundData && db.roundData[id]) {           // 저장해 둔 것이 있으면 그것으로 연다
+      putRound(db.roundData[id]);
+      refreshRound(id);                                // 뒤에서 조용히 새로 받아 둔다
+      return db.roundData[id];
+    }
     if (!live()) return cur || null;
+
     const res = await get({ action: 'round', pin: PIN, id: id });
     if (!res || !res.ok || !res.round) throw new Error('회차를 받지 못했습니다');
-    roundCache[id] = res.round;
-    const i = (window.Rounds || []).findIndex(r => r.id === id);
-    if (i >= 0) window.Rounds[i] = res.round; else window.Rounds.push(res.round);
+    db.roundData[id] = res.round;
+    localSave();
+    putRound(res.round);
     return res.round;
+  }
+
+  function putRound(round) {
+    const i = (window.Rounds || []).findIndex(r => r.id === round.id);
+    if (i >= 0) window.Rounds[i] = round; else (window.Rounds = window.Rounds || []).push(round);
+  }
+
+  async function refreshRound(id) {
+    if (!live()) return;
+    try {
+      const res = await get({ action: 'round', pin: PIN, id: id });
+      if (res && res.ok && res.round) {
+        db.roundData[id] = res.round;
+        localSave();
+      }
+    } catch (e) { }
   }
 
   function k(round, staff) { return round + '||' + staff; }
