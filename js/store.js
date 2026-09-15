@@ -83,7 +83,8 @@
 
       function tryFetch(n) {
         if (settled) return;
-        viaFetch(url + (postBody ? '' : (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()), opts)
+        // 캐시 방지 꼬리표를 붙이면 구글이 404 를 돌려준다. cache:'no-store' 로 충분하다.
+        viaFetch(url, opts)
           .then(finish, e => {
             if (settled) return;
             note('직접 요청 ' + (n + 1) + '차 실패: ' + String(e.message || e).slice(0, 44));
