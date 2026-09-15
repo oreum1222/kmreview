@@ -129,6 +129,7 @@
     if (db.roundList && db.roundList.length) {          // 지난번에 받아 둔 것으로 먼저 연다
       window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
       note('저장해 둔 회차 목록으로 먼저 엽니다');
+      if (window.__offline) { refreshRoundList(); return; }   // 기다리지 않는다
     }
     try {
       const lst = await get({ action: 'roundlist', pin: PIN });
@@ -138,6 +139,16 @@
         window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
       }
     } catch (e) { note('회차 목록 실패: ' + String(e.message || e).slice(0, 40)); }
+  }
+
+  async function refreshRoundList() {
+    try {
+      const lst = await get({ action: 'roundlist', pin: PIN });
+      if (lst && lst.ok && lst.rounds) {
+        db.roundList = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        localSave();
+      }
+    } catch (e) { }
   }
 
   /* 답안과 검수 기록은 뒤에서 받아 온다. 늦어도 화면은 이미 떠 있다. */
