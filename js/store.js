@@ -129,7 +129,8 @@
     if (db.roundList && db.roundList.length) {          // 지난번에 받아 둔 것으로 먼저 연다
       window.Rounds = db.roundList.map(m => db.roundData[m.id] || m);
       note('저장해 둔 회차 목록으로 먼저 엽니다');
-      if (window.__offline) { refreshRoundList(); return; }   // 기다리지 않는다
+      refreshRoundList();                                   // 새 목록은 뒤에서 받는다
+      return;                                                // 저장해 둔 것이 있으면 기다리지 않는다
     }
     try {
       const lst = await get({ action: 'roundlist', pin: PIN });
