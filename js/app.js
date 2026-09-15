@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260914a';
+      s.src = 'data/rounds.js?v=20260915a';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);
@@ -186,7 +186,7 @@
       const btn = document.getElementById('gateGo');
       err.textContent = ''; btn.disabled = true; btn.textContent = '확인 중';
       // 서버가 자고 있으면 첫 응답이 느리다. 기다리는 중이라는 것을 보여 준다.
-      const slow = setTimeout(() => { err.style.color = 'var(--dim)'; err.textContent = '서버가 느립니다. 잠시만 기다려 주십시오.'; }, 3000);
+      const slow = setTimeout(() => { err.style.color = 'var(--dim)'; err.textContent = '서버가 느립니다. 다시 잡는 중이니 그대로 기다려 주십시오.'; }, 3000);
       let r;
       try {
         log('서버에 확인 요청');

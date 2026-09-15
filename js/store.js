@@ -58,7 +58,7 @@
     });
   }
 
-  /* 두 통로를 함께 띄우고 먼저 오는 쪽을 쓴다. 하나가 멈춰도 다른 쪽이 살린다. */
+  /* 두 통로를 함께 띄우고 먼저 오는 쪽을 쓴다. 구글이 가끔 404 를 돌려주므로 양쪽 다 여러 번 다시 잡는다. */
   function ask(params, postBody) {
     const url = postBody ? window.CONFIG.SCRIPT_URL : withUrl(params).toString();
     const opts = postBody
@@ -66,23 +66,35 @@
       : { cache: 'no-store' };
 
     return new Promise((resolve, reject) => {
-      let settled = false, hedged = false;
+      let settled = false;
       const finish = v => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); resolve(v); } };
       const fail = e => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); reject(e); } };
 
-      viaFetch(url, opts).then(finish, e => {
-        note('직접 요청 실패: ' + String(e.message || e).slice(0, 50));
-        if (!params) return fail(e);                      // 우회 통로로는 못 하는 요청
-        if (!hedged) { hedged = true; viaScript(params).then(finish, fail); }
-      });
+      const TRIES = 4;
 
-      const hedge = setTimeout(() => {
-        if (settled || hedged || !params) return;
-        hedged = true;
-        note('응답이 늦어 우회 통로도 함께 시도');
-        viaScript(params).then(finish, () => { });
-      }, HEDGE_AFTER);
+      function tryFetch(n) {
+        if (settled) return;
+        viaFetch(url + (postBody ? '' : (url.indexOf('?') >= 0 ? '&' : '?') + '_=' + Date.now()), opts)
+          .then(finish, e => {
+            if (settled) return;
+            note('직접 요청 ' + (n + 1) + '차 실패: ' + String(e.message || e).slice(0, 44));
+            if (n + 1 < TRIES) setTimeout(() => tryFetch(n + 1), 900 * (n + 1));
+            else if (!params) fail(e);          // 우회 통로로는 못 하는 요청
+          });
+      }
 
+      function tryScript(n) {
+        if (settled || !params) return;
+        viaScript(params).then(finish, e => {
+          if (settled) return;
+          note('우회 통로 ' + (n + 1) + '차 실패');
+          if (n + 1 < TRIES) setTimeout(() => tryScript(n + 1), 900 * (n + 1));
+        });
+      }
+
+      tryFetch(0);
+
+      const hedge = setTimeout(() => { if (!settled) { note('응답이 늦어 우회 통로도 함께 시도'); tryScript(0); } }, HEDGE_AFTER);
       const cap = setTimeout(() => fail(new Error('서버가 응답하지 않습니다')), BUDGET);
     });
   }
