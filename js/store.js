@@ -23,7 +23,7 @@
 
   /* 어떤 브라우저에서는 fetch 가 응답도 오류도 없이 매달린다.
      그래서 시간 제한을 걸고, 그래도 안 되면 script 태그로 받아 온다(JSONP). */
-  const HEDGE_AFTER = 2500;    // 직접 요청이 이만큼 조용하면 우회 통로도 함께 띄운다
+  const HEDGE_AFTER = 5000;    // 직접 요청이 이만큼 조용하면 우회 통로도 함께 띄운다
   const BUDGET = 90000;        // 둘 다 이만큼까지 기다린다
   function note(m) { if (window.__kmlog) window.__kmlog(m); }
 
@@ -34,7 +34,7 @@
     return u;
   }
 
-  const ATTEMPT = 8000;    // 한 번의 시도를 이만큼만 기다리고 바로 다시 잡는다
+  const ATTEMPT = 25000;   // 정상 응답도 4~15초 걸린다. 진짜 멈춘 것만 끊는다.
 
   function viaFetch(url, opts) {
     const ac = new AbortController();
@@ -79,7 +79,7 @@
       const finish = v => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); resolve(v); } };
       const fail = e => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); reject(e); } };
 
-      const TRIES = 6;
+      const TRIES = 5;
 
       function tryFetch(n) {
         if (settled) return;
