@@ -23,7 +23,7 @@
 
   /* 어떤 브라우저에서는 fetch 가 응답도 오류도 없이 매달린다.
      그래서 시간 제한을 걸고, 그래도 안 되면 script 태그로 받아 온다(JSONP). */
-  const HEDGE_AFTER = 6000;    // 직접 요청이 이만큼 조용하면 우회 통로도 함께 띄운다
+  const HEDGE_AFTER = 2500;    // 직접 요청이 이만큼 조용하면 우회 통로도 함께 띄운다
   const BUDGET = 90000;        // 둘 다 이만큼까지 기다린다
   function note(m) { if (window.__kmlog) window.__kmlog(m); }
 
@@ -34,13 +34,21 @@
     return u;
   }
 
+  const ATTEMPT = 8000;    // 한 번의 시도를 이만큼만 기다리고 바로 다시 잡는다
+
   function viaFetch(url, opts) {
-    return (async () => {
-      const r = await fetch(url, opts);
+    const ac = new AbortController();
+    let timer;
+    const ticking = new Promise((_, rej) => {
+      timer = setTimeout(() => { try { ac.abort(); } catch (e) { } rej(new Error('응답 없음')); }, ATTEMPT);
+    });
+    const run = (async () => {
+      const r = await fetch(url, Object.assign({ signal: ac.signal }, opts));
       const t = await r.text();
       try { return JSON.parse(t); }
       catch (pe) { throw new Error('JSON 아님 ' + r.status); }
     })();
+    return Promise.race([run, ticking]).finally(() => clearTimeout(timer));
   }
 
   let jsonpN = 0;
@@ -50,7 +58,8 @@
       const u = withUrl(params);
       u.searchParams.set('callback', cb);
       const el = document.createElement('script');
-      function done() { try { delete window[cb]; } catch (e) { } el.remove(); }
+      const timer = setTimeout(() => { done(); rej(new Error('우회 통로 응답 없음')); }, ATTEMPT + 4000);
+      function done() { clearTimeout(timer); try { delete window[cb]; } catch (e) { } el.remove(); }
       window[cb] = d => { done(); res(d); };
       el.onerror = () => { done(); rej(new Error('우회 통로 실패')); };
       el.src = u.toString();
@@ -70,7 +79,7 @@
       const finish = v => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); resolve(v); } };
       const fail = e => { if (!settled) { settled = true; clearTimeout(hedge); clearTimeout(cap); reject(e); } };
 
-      const TRIES = 4;
+      const TRIES = 6;
 
       function tryFetch(n) {
         if (settled) return;
@@ -78,7 +87,7 @@
           .then(finish, e => {
             if (settled) return;
             note('직접 요청 ' + (n + 1) + '차 실패: ' + String(e.message || e).slice(0, 44));
-            if (n + 1 < TRIES) setTimeout(() => tryFetch(n + 1), 900 * (n + 1));
+            if (n + 1 < TRIES) setTimeout(() => tryFetch(n + 1), 500);
             else if (!params) fail(e);          // 우회 통로로는 못 하는 요청
           });
       }
@@ -88,7 +97,7 @@
         viaScript(params).then(finish, e => {
           if (settled) return;
           note('우회 통로 ' + (n + 1) + '차 실패');
-          if (n + 1 < TRIES) setTimeout(() => tryScript(n + 1), 900 * (n + 1));
+          if (n + 1 < TRIES) setTimeout(() => tryScript(n + 1), 500);
         });
       }
 
