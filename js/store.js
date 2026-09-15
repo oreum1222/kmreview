@@ -253,8 +253,22 @@
   async function verify(pin) {
     setPin(pin);
     if (!live()) return pin === window.CONFIG.PIN ? { ok: true } : { ok: false, reason: 'pin' };
+    // 전에 이 기기에서 통과했고 받아 둔 자료가 있으면 오래 기다리지 않는다
+    let seenNow = false;
+    try { seenNow = localStorage.getItem(mark(USER, pin)) === '1'; } catch (e0) { }
+    localLoad();
+    const canOffline = seenNow && db.roundList && db.roundList.length > 0;
+
     try {
-      const res = await get({ action: 'auth', pin: pin });
+      const call = get({ action: 'auth', pin: pin });
+      const res = canOffline
+        ? await Promise.race([call, new Promise(r => setTimeout(() => r('__wait'), 18000))])
+        : await call;
+      if (res === '__wait') {
+        note('서버가 늦어 저장해 둔 자료로 먼저 엽니다');
+        call.catch(() => { });
+        return { ok: true, offline: true };
+      }
       if (res && res.ok) {
         try { localStorage.setItem(mark(USER, pin), '1'); } catch (e) { }
         return { ok: true };
