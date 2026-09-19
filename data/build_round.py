@@ -11,13 +11,15 @@ def hwpx_paras(path):
         for para in re.findall(r'<hp:p\b.*?</hp:p>|<hp:p\b[^>]*/>', x, re.S):
             ts = re.findall(r'<hp:t>(.*?)</hp:t>', para, re.S)
             s = ''.join(ts)
+            s = re.sub(r'<hp:lineBreak\s*/>', ' ', s)     # 문단 안 줄바꿈
+            s = re.sub(r'<[^>]+>', '', s)                   # 그 밖의 태그 찌꺼기
             s = (s.replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
                    .replace('&quot;', '"').replace('&apos;', "'"))
             out.append(s.strip())
     return out
 
 SUB = re.compile(r'^\((\d)\)\s*(.+)$')
-SCORE = re.compile(r'\(([\d.]+)\s*점\)\s*$')
+SCORE = re.compile(r'\(([\d.]+)\s*점\)')   # 발문 끝이 아니어도 첫 배점 표기를 읽는다
 
 def kind_of(balmun):
     if re.search(r'찾아\s*(?:\S+\s*)?쓰', balmun):
@@ -56,7 +58,7 @@ def parse_questions(L, start, end, gyeyeol):
             n, txt = m.group(1), m.group(2).strip()
             sm = SCORE.search(txt)
             score = float(sm.group(1)) if sm else None
-            balmun = SCORE.sub('', txt).strip()
+            balmun = re.sub(r'\s{2,}', ' ', SCORE.sub('', txt, count=1)).strip()
             nxt = subidx[j + 1] if j + 1 < len(subidx) else stop
             lines = [x for x in (L[i].strip() for i in range(si + 1, nxt)) if x]
             # 문제지에는 소문항마다 '선행학습보고서 ... 변형' 다음 줄에 답이 적혀 있다
@@ -142,6 +144,36 @@ def build(path, rid, title, date):
             # 채점 기준은 문제지에 적힌 답이 우선이다. 해설지가 아직 안 고쳐진 회차가 있다.
             s['answer'] = s.get('paperAnswer') or s['haeseolAnswer']
     return {'id': rid, 'title': title, 'date': date, 'items': qs}
+
+def build_split(prob_path, hae_path, rid, title, date):
+    """문제(복습지)와 해설지가 따로 있는 판본. 문제는 복습지에서, 정답과 해설과 채점기준은 해설지에서 읽는다."""
+    P = hwpx_paras(prob_path)
+    H = hwpx_paras(hae_path)
+
+    def find(L, pred, frm=0):
+        for i in range(frm, len(L)):
+            if pred(L[i].strip()):
+                return i
+        return len(L)
+
+    pi = find(P, lambda s: s == '인문계열')
+    pj = find(P, lambda s: s == '자연계열', pi + 1)
+    qs = parse_questions(P, pi, pj, '인문') + parse_questions(P, pj, len(P), '자연')
+
+    h1 = find(H, lambda s: s == '논술고사해설지')
+    h2 = find(H, lambda s: s == '논술고사해설지', h1 + 1)
+    hb = parse_haeseol(H, h1, h2) + parse_haeseol(H, h2, len(H))
+
+    for q, blk in zip(qs, hb):
+        for s in q['subs']:
+            d = blk.get(s['no'], {})
+            s['haeseolAnswer'] = d.get('answer', '')
+            s['haeseol'] = d.get('haeseol', '')
+            s['rubricText'] = d.get('rubric', '')
+            s['answer'] = s.get('paperAnswer') or s['haeseolAnswer']
+    return {'id': rid, 'title': title, 'date': date, 'items': qs,
+            'source': [os.path.basename(prob_path), os.path.basename(hae_path)],
+            '_hb': len(hb)}
 
 if __name__ == '__main__':
     src = r'C:\Users\김가경\OneDrive\바탕 화면\문서\카카오톡 받은 파일\2027_CSM_국민대_파이널_3회_0908 가경T 수정완.hwpx'

@@ -51,7 +51,7 @@
     return new Promise(res => {
       if (window.CONFIG.SCRIPT_URL) return res();
       const s = document.createElement('script');
-      s.src = 'data/rounds.js?v=20260915j';
+      s.src = 'data/rounds.js?v=20260919a';
       s.onload = () => res();
       s.onerror = () => res();
       document.head.appendChild(s);

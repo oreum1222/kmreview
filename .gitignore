@@ -2,3 +2,9 @@
 data/rounds.js
 data/*.json
 node_modules/
+# 백업, 작업 찌꺼기, 파이썬 캐시도 절대 올리지 않는다
+data/_old*/
+data/**/*.json
+_*.txt
+__pycache__/
+*.pyc

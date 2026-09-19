@@ -1,6 +1,7 @@
 /* 저장소 — SCRIPT_URL 이 비면 로컬(브라우저), 채워지면 구글시트 */
 (function () {
   const KEY = () => window.CONFIG.STORAGE_KEY;
+  const ROUND_VER = '0916-final';   // 회차 본문 판본
   const live = () => !!window.CONFIG.SCRIPT_URL;
   let PIN = '', USER = '';
   function setPin(p) { PIN = p; }
@@ -18,6 +19,8 @@
     if (!db.reviews) db.reviews = {};
     if (!db.roundList) db.roundList = [];
     if (!db.roundData) db.roundData = {};
+    // 회차 본문이 새 판본으로 바뀌면 이 값을 올린다. 답안과 검수 기록은 지우지 않는다.
+    if (db.roundVer !== ROUND_VER) { db.roundList = []; db.roundData = {}; db.roundVer = ROUND_VER; }
   }
   function localSave() {
     try { localStorage.setItem(KEY(), JSON.stringify(db)); } catch (e) { }
@@ -147,9 +150,18 @@
       const lst = await get({ action: 'roundlist', pin: PIN });
       if (lst && lst.ok && lst.rounds) {
         db.roundList = lst.rounds.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+        dropStale();
         localSave();
       }
     } catch (e) { }
+  }
+
+  /* 서버의 회차 날짜와 저장본 날짜가 다르면 저장본을 버린다 */
+  function dropStale() {
+    (db.roundList || []).forEach(m => {
+      const c = db.roundData[m.id];
+      if (c && String(c.date || '') !== String(m.date || '')) delete db.roundData[m.id];
+    });
   }
 
   /* 답안과 검수 기록은 뒤에서 받아 온다. 늦어도 화면은 이미 떠 있다. */
