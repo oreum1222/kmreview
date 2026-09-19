@@ -126,7 +126,7 @@ function doGet(e) {
       var id2 = lr[i2][0];
       if (!id2 || seen[id2]) continue;
       seen[id2] = true;
-      lst.push({ id: id2, title: lr[i2][1], date: lr[i2][2] });
+      lst.push({ id: id2, title: lr[i2][1], date: ymd_(lr[i2][2]) });   // 시트가 날짜로 바꾼 값을 되돌린다
     }
     return json_({ ok: true, rounds: lst }, cb);
   }
