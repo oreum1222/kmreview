@@ -30,8 +30,8 @@ window.Views.review = (function () {
     const head = document.createElement('div');
     head.innerHTML = '<h2 class="sec">검수</h2><p class="sub">' +
       '문항을 고르고 여섯 묶음 ' + window.CHECK_COUNT + '개 항목을 확인하십시오. ' +
-      '자동 점검이 먼저 돌아가 있으니 붉은 표시가 붙은 항목부터 보시면 됩니다. ' +
-      '문제 있음을 고르면 메모가 필수입니다.</p>';
+      '자동 점검이 먼저 돌아가 있으니 붉은 표시가 붙은 항목부터 보시면 됩니다.</p>' +
+      '<div class="howto">모든 항목은 <b>맞으면 정상</b>인 문장입니다. 문장이 맞으면 <b>맞음</b>, 맞지 않으면 <b>아님</b>을 누르고 무엇이 틀렸는지 적으십시오. 이 문항과 상관없는 항목은 <b>해당 없음</b>.</div>';
     el.appendChild(head);
 
     /* 문항 칩 */
@@ -110,7 +110,7 @@ window.Views.review = (function () {
       gh.appendChild(prog);
       const pass = document.createElement('button');
       pass.className = 'btn sm';
-      pass.textContent = '이 묶음 전체 이상 없음';
+      pass.textContent = '이 묶음 전부 맞음';
       pass.onclick = e => {
         e.stopPropagation();
         g.items.forEach(i => {
@@ -145,7 +145,7 @@ window.Views.review = (function () {
           txt.appendChild(n);
         });
         const memo = document.createElement('textarea');
-        memo.placeholder = '지적 내용을 적으십시오';
+        memo.placeholder = '무엇이 맞지 않는지 적으십시오';
         memo.value = cur.memo || '';
         memo.hidden = cur.s !== 'issue';
         memo.oninput = () => { cur.memo = memo.value; window.Store.setReviews(round.id, staff, rev); };
@@ -154,10 +154,10 @@ window.Views.review = (function () {
 
         const st = document.createElement('div');
         st.className = 'st';
-        [['ok', '○'], ['issue', '✕'], ['na', '－']].forEach(([k, label]) => {
+        [['ok', '맞음'], ['issue', '아님'], ['na', '해당 없음']].forEach(([k, label]) => {
           const b = document.createElement('button');
           b.dataset.s = k; b.textContent = label;
-          b.title = { ok: '이상 없음', issue: '문제 있음', na: '해당 없음' }[k];
+          b.title = { ok: '문장이 맞다 = 이상 없음', issue: '문장이 맞지 않다 = 문제 있음, 메모 필수', na: '이 문항과 상관없는 항목' }[k];
           b.className = cur.s === k ? 'on' : '';
           b.onclick = () => {
             cur.s = cur.s === k ? null : k;
